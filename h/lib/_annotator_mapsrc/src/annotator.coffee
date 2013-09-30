@@ -19,7 +19,10 @@ util =
     Math.max.apply(Math, all)
 
   mousePosition: (e, offsetEl) ->
-    offset = $(offsetEl).position()
+    # If the offset element is not a positioning root use its offset parent
+    unless $(offsetEl).css('position') in ['absolute', 'fixed', 'relative']
+      offsetEl = $(offsetEl).offsetParent()[0]
+    offset = $(offsetEl).offset()
     {
       top:  e.pageY - offset.top,
       left: e.pageX - offset.left
@@ -99,6 +102,7 @@ class Annotator extends Delegator
     this._setupMatching() unless @options.noMatching
     this._setupViewer()._setupEditor()
     this._setupDynamicStyle()
+    this.pdfMode = PDFView?.initialized ? false
 
     # Perform initial DOM scan, unless told not to.
     this._scan() unless (@options.noScan or @options.noMatching)
@@ -112,12 +116,16 @@ class Annotator extends Delegator
     @domMapper = new DomTextMapper()
     @domMatcher = new DomTextMatcher @domMapper
     @domMapper.setRootNode @wrapper[0]
+    @pdfMapper = new PDFTextMapper()
 
     this
 
   # Perform a scan of the DOM. Required for finding anchors.
   _scan: ->
-    @domMatcher.scan()   
+    if @pdfMode
+      @pdfMapper.scan()
+    else
+      @domMatcher.scan()
  
   # Wraps the children of @element in a @wrapper div. NOTE: This method will also
   # remove any script elements inside @element to prevent them re-executing.
@@ -400,9 +408,11 @@ class Annotator extends Delegator
       content = @domMapper.getContentForCharRange selector.start, selector.end
       currentQuote = this.normalizeString content
       if currentQuote isnt savedQuote
-        console.log "Could not apply position selector to current document \
-          because the quote has changed. (Saved quote is '#{savedQuote}'. \
-          Current quote is '#{currentQuote}'.)"
+        console.log "Could not apply position selector" +
+          " [#{selector.start}:#{selector.end}] to current document," +
+          " because the quote has changed." +
+          "(Saved quote is '#{savedQuote}'." +
+          " Current quote is '#{currentQuote}'.)"
         return null
       else
 #        console.log "Saved quote matches."
